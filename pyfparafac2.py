@@ -45,16 +45,26 @@ def pyfparafac2als(Xk, R):
 
     while (ssr1-ssr2)/ssr2 > eps and (ssr1 - ssr2) > eps and iterNo < maxIter:
 
-    ssr1 = ssr2
+        ssr1 = ssr2
 
-    #Pk estimation
-    for kk in range(sz[2]):
-        if iterNo > 1:
-            U, S, V = sp.sparse.linalg.svds(Xk[:, :, kk])
-            Pk[:,:,kk] = U.dot(np.transpose(V))
-            #Bs estimation
-            BsT[:, :, kk] = mk[kk]*np.transpose(Pk[:, :, kk]).dot(Bk[:, :, kk])
-            BkDk[:, :, kk] = Bk[:, :, kk].dot(Dk[:, :, kk])
+        #Pk estimation
+        for kk in range(sz[2]):
+            if iterNo > 1:
+                U, S, V = sp.sparse.linalg.svds(Xk[:, :, kk])
+                Pk[:,:,kk] = U.dot(np.transpose(V))
+                #Bs estimation
+                BsT[:, :, kk] = mk[kk]*np.transpose(Pk[:, :, kk]).dot(Bk[:, :, kk])
+                BkDk[:, :, kk] = Bk[:, :, kk].dot(Dk[:, :, kk])
+            else:
+                BsT[:, :, kk] = mk[kk] * np.transpose(Pk[:, :, kk]).dot(Bk[:, :, kk])
+                BkDk[:, :, kk] = Bk[:, :, kk].dot(Dk[:, :, kk])
+
+    Bs = 1/(np.sum(mk)*np.sum(BsT, axis=2))
+    Bs /= np.linalg.norm(Bs, axis=0)
+
+    BkDkIK = BkDk.reshape(sz[0]*sz[2], R,) ##This is going to be a little abstract
+
+
 
 
 
