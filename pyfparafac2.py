@@ -2,6 +2,7 @@
 # As described by Cohen and Bro
 
 import numpy as np
+import scipy as sp
 import random as rnd
 from fnnls import fnnls
 
@@ -25,10 +26,11 @@ def pyfparafac2als(Xk, R):
     A = np.random.rand(sz(1), R)
     Xh = np.zeros(1, sz[2])
     BsT = Dk
+    BkDk = np.zeros((sz[0], R, sz[2]))
 
     for kk in range(sz[2]):
 
-        U, S, V = np.sparse.linalg.svds(Xk[:, :, kk], R)
+        U, S, V = sp.sparse.linalg.svds(Xk[:, :, kk], R)
         Pk[:, :, kk] = U.dot(np.transpose(V))
         Xh[kk] = Bk[:, :, kk].dot(Dk[:, :, kk]).dot(np.transpose(A))
         mk[kk] = np.linalg.norm(np.ravel(Xk[:, :, kk]) - np.ravel(Xh[:, :, kk]))**2/R**2
@@ -48,10 +50,11 @@ def pyfparafac2als(Xk, R):
     #Pk estimation
     for kk in range(sz[2]):
         if iterNo > 1:
-            U, S, V = np.sparse.linalg.svds(Xk[:,:,kk])
+            U, S, V = sp.sparse.linalg.svds(Xk[:, :, kk])
             Pk[:,:,kk] = U.dot(np.transpose(V))
             #Bs estimation
-            BsT[:,:,kk] = mk[kk]*
+            BsT[:, :, kk] = mk[kk]*np.transpose(Pk[:, :, kk]).dot(Bk[:, :, kk])
+            BkDk[:, :, kk] = Bk[:, :, kk].dot(Dk[:, :, kk])
 
 
 
