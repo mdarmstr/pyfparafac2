@@ -22,6 +22,7 @@ def pyfparafac2(Xk,R):
 
 
 
+
 if __name__ == '__main__':
     Xk = pyfparafac2parse("roi_2.npy")
     print(Xk)
