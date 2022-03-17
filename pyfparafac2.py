@@ -16,11 +16,44 @@ def pyfparafac2parse(Xk): #This is working; can either open an .npz or an .npy f
         return Xk, sz #may have some redundancies, let's worry about that later :)
 
 def pyfparafac2als(Xk, R):
+
     sz = np.shape(Xk)
-    Pk = np.zeros((sz[0], R, sz[3]))
+    Pk = np.zeros((sz[0], R, sz[2]))
+    mk = np.zeros((1, sz[2]))
+    Bk = np.random.rand(sz[0], R, sz[2])
+    Dk = np.repeat(np.eye(R), sz[2], axis=2)
+    A = np.random.rand(sz(1), R)
+    Xh = np.zeros(1, sz[2])
+    BsT = Dk
+
     for kk in range(sz[2]):
-        U, S, V = np.linalg.svd(Xk[:, :, kk], R)
+
+        U, S, V = np.sparse.linalg.svds(Xk[:, :, kk], R)
         Pk[:, :, kk] = U.dot(np.transpose(V))
+        Xh[kk] = Bk[:, :, kk].dot(Dk[:, :, kk]).dot(np.transpose(A))
+        mk[kk] = np.linalg.norm(np.ravel(Xk[:, :, kk]) - np.ravel(Xh[:, :, kk]))**2/R**2
+        ssr1 = np.linalg.norm(np.ravel(Xk) - np.ravel(Xh))**2
+
+    ssr2 = 0
+    iterNo = 1
+    maxIter = 1000
+    eps = 1e-8
+    YNorm = np.linalg.norm(np.ravel(Xk))**2
+    ssr1 = ssr1/YNorm
+
+    while (ssr1-ssr2)/ssr2 > eps and (ssr1 - ssr2) > eps and iterNo < maxIter:
+
+    ssr1 = ssr2
+
+    #Pk estimation
+    for kk in range(sz[2]):
+        if iterNo > 1:
+            U, S, V = np.sparse.linalg.svds(Xk[:,:,kk])
+            Pk[:,:,kk] = U.dot(np.transpose(V))
+            #Bs estimation
+            BsT[:,:,kk] = mk[kk]*
+
+
 
 
 
