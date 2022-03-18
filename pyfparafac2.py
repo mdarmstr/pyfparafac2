@@ -5,6 +5,7 @@ import numpy as np
 import scipy as sp
 import random as rnd
 from fnnls import fnnls
+from tensorly import unfold
 
 def pyfparafac2parse(Xk): #This is working; can either open an .npz or an .npy file
     if Xk.endswith(".npz"):
@@ -27,6 +28,7 @@ def pyfparafac2als(Xk, R):
     Xh = np.zeros(1, sz[2])
     BsT = Dk
     BkDk = np.zeros((sz[0], R, sz[2]))
+    Xkij = np.zeros((sz[0]*sz[2], sz[1]))
 
     for kk in range(sz[2]):
 
@@ -51,7 +53,7 @@ def pyfparafac2als(Xk, R):
         for kk in range(sz[2]):
             if iterNo > 1:
                 U, S, V = sp.sparse.linalg.svds(Xk[:, :, kk])
-                Pk[:,:,kk] = U.dot(np.transpose(V))
+                Pk[:, :, kk] = U.dot(np.transpose(V))
                 #Bs estimation
                 BsT[:, :, kk] = mk[kk]*np.transpose(Pk[:, :, kk]).dot(Bk[:, :, kk])
                 BkDk[:, :, kk] = Bk[:, :, kk].dot(Dk[:, :, kk])
@@ -62,7 +64,17 @@ def pyfparafac2als(Xk, R):
     Bs = 1/(np.sum(mk)*np.sum(BsT, axis=2))
     Bs /= np.linalg.norm(Bs, axis=0)
 
-    BkDkIK = BkDk.reshape(sz[0]*sz[2], R,) ##This is going to be a little abstract
+    BkDkIK = np.vstack(BkDk)
+
+    if iterNo == 1:
+        Xkij = np.vstack(Xk)
+
+    A = fnnls(np.transpose(BkDkIK).dot(BkDkIK), np.transpose(BkDkIK).dot(Xkij))
+
+    A /= np.linalg.norm(A, axis=0)
+
+    A = np.nan_to_num(A)
+
 
 
 
