@@ -4,6 +4,7 @@ from scipy.sparse.linalg import svds
 from fnnls import fnnls
 import matplotlib.pyplot as plt
 
+
 # Flexible Coupling (Non-negative) PARAFAC2
 # As described by Cohen and Bro
 # [c] Michael Sorochan Armstrong, 2022
@@ -19,7 +20,7 @@ def pyfparafac2parse(Xk):  # This is working; can either open an .npz or an .npy
     return Xk  # may have some redundancies, let's worry about that later :)
 
 
-def pyfparafac2als(Xk, R, eps, maxiter, displ, animate, Bk, A, Dk, Bs):
+def pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bk, A, Dk, Bs):
     # Initialisation
     sz = np.shape(Xk)
     Pk = np.zeros((sz[0], R, sz[2]))
@@ -47,8 +48,6 @@ def pyfparafac2als(Xk, R, eps, maxiter, displ, animate, Bk, A, Dk, Bs):
 
     ssr2 = 1e-6
     iterNo = 1
-    maxIter = 1000
-    eps = 1e-8
     YNorm = np.linalg.norm(np.ravel(Xk)) ** 2
     ssr1 /= YNorm
 
@@ -134,8 +133,12 @@ def pyfparafac2als(Xk, R, eps, maxiter, displ, animate, Bk, A, Dk, Bs):
     return Bk, A, Dk, Bs, SSR, pvar
 
 
-def pyfparafac2(Xk, R, eps=1e-8, maxiter=1000, displ=True, animate=False, *args):
-    # pyfparafac2als(Xk, R, eps, maxiter, displ, animate, Bk, A, Dk, Bs):
+def pyfparafac2(Xk, R, eps=1e-8, maxIter=1000, displ=True, animate=False, *args):
+
+    Bsi = []
+    Dki = []
+    Ai = []
+    Bki = []
 
     Xk = pyfparafac2parse(Xk)
 
@@ -147,7 +150,7 @@ def pyfparafac2(Xk, R, eps=1e-8, maxiter=1000, displ=True, animate=False, *args)
 
         print('Utilising input initialisations, and readout controls')
 
-        Bk, A, Dk, Bs, ssr, pvar = pyfparafac2als(Xk, R, eps, maxiter, displ, animate, Bki, Ai, Dki, Bsi)
+        Bk, A, Dk, Bs, ssr, pvar = pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bki, Ai, Dki, Bsi)
 
     elif len(args) == 3:
         Bsi = np.eye(R)
@@ -157,7 +160,7 @@ def pyfparafac2(Xk, R, eps=1e-8, maxiter=1000, displ=True, animate=False, *args)
 
         print('Bs initialised as identity matrix. Utilising remaining input initialisations and readout controls')
 
-        Bk, A, Dk, Bs, ssr, pvar = pyfparafac2als(Xk, R, eps, maxiter, displ, animate, Bki, Ai, Dki, Bsi)
+        Bk, A, Dk, Bs, ssr, pvar = pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bki, Ai, Dki, Bsi)
 
     elif len(args) == 2:
         Bsi = np.eye(R)
@@ -169,7 +172,7 @@ def pyfparafac2(Xk, R, eps=1e-8, maxiter=1000, displ=True, animate=False, *args)
         print('Bs, and Dk initialised as identity matrices. Utilising remaining input initialisations and readout \n '
               'controls')
 
-        Bk, A, Dk, Bs, ssr, pvar = pyfparafac2als(Xk, R, eps, maxiter, displ, animate, Bki, Ai, Dki, Bsi)
+        Bk, A, Dk, Bs, ssr, pvar = pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bki, Ai, Dki, Bsi)
 
     elif len(args) == 1:
         Bsi = np.eye(R)
@@ -193,6 +196,32 @@ def pyfparafac2(Xk, R, eps=1e-8, maxiter=1000, displ=True, animate=False, *args)
         initIndx = np.argmin(ssrInit)
 
         Bk, A, Dk, Bs, ssr, pvar = pyfparafac2als(Xk, R, eps, maxiter, displ, animate, Bki, Ai[:, :, initIndx], Dki, Bsi)
+
+    else:
+        Bsi = np.eye(R)
+        Dki = np.eye(R)
+        Dki = np.repeat(Dki[:, :, np.newaxis], np.size(Xk, 2), axis=2)
+        Ai = np.zeros((np.size(Xk, 1), R, 10))
+        Bki = np.zeros((np.size(Xk, 0), R, np.size(Xk, 2), 10))
+        ssrInit = []
+
+        print('Bs, and Dk initialised as identity matrices. A and Bk are randomly initialised. Utilising remaining input \n '
+              'initialisations and readout controls. Best of 10 random initialisations.')
+
+        for re in range(9):
+            Ai[:, :, re] = np.random.rand(np.size(Xk, 1), R)
+            Ai /= np.linalg.norm(Ai, axis=0)
+            for kk in range(np.size(Xk, 2)):
+                Bki[:, :, kk, re] /= np.linalg.norm(Bki[:, :, kk, re], axis=0)
+
+            print('Testing initialisation ', re, 'out of ', 10)
+            Bk, A, Dk, Bs, ssr, pvar = pyfparafac2als(Xk, R, 1e-20, 20, displ, animate, Bki[:, :, :, re], Ai[:, :, re], Dki, Bsi)
+            ssrInit.append(ssr[-1])
+            del ssr
+
+        initIndx = np.argmin(ssrInit)
+
+        Bk, A, Dk, Bs, ssr, pvar = pyfparafac2als(Xk, R, eps, maxiter, displ, animate, Bk[:, :, :, initIndx], Ai[:, :, initIndx], Dki, Bsi)
 
     return Bk, A, Dk, Bs, ssr, pvar
 
