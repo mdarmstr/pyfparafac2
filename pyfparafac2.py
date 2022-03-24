@@ -26,11 +26,11 @@ def pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bk, A, Dk, Bs):
     Pk = np.zeros((sz[0], R, sz[2]))
     Bhk = np.zeros((sz[0], R, sz[2]))
     mk = np.zeros((1, sz[2]))
-    Bk = np.random.rand(sz[0], R, sz[2])
-    Dk = np.eye(R)
-    Bs = np.eye(R)
-    Dk = np.repeat(Dk[:, :, np.newaxis], sz[2], axis=2)
-    A = np.random.rand(sz[1], R)
+    # Bk = np.random.rand(sz[0], R, sz[2])
+    # Dk = np.eye(R)
+    # Bs = np.eye(R)
+    # Dk = np.repeat(Dk[:, :, np.newaxis], sz[2], axis=2)
+    # A = np.random.rand(sz[1], R)
     Xh = np.zeros(sz)
     BkDk = np.zeros((sz[0], R, sz[2]))
     Xkij = np.zeros((sz[0] * sz[2], sz[1]))
@@ -39,8 +39,8 @@ def pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bk, A, Dk, Bs):
 
     for kk in range(sz[2]):
         U, S, V = np.linalg.svd(Bk[:, :, kk] @ Bs)
-        Pk[:, :, kk] = U[:, :R].dot(np.transpose(V))
-        Xh[:, :, kk] = Bk[:, :, kk].dot(Dk[:, :, kk]).dot(np.transpose(A))
+        Pk[:, :, kk] = U[:, :R] @ V.T
+        Xh[:, :, kk] = Bk[:, :, kk] @ Dk[:, :, kk] @ A.T
         mk[0, kk] = np.linalg.norm(np.ravel(Xk[:, :, kk]) - np.ravel(Xh[:, :, kk])) ** 2 / (np.linalg.norm(Bk[:, :, kk]) ** 2) # The norm of Bk should be equal to the number of factors
         Bhk[:, :, kk] = Bk[:, :, kk] - Pk[:, :, kk] @ Bs
 
@@ -59,16 +59,24 @@ def pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bk, A, Dk, Bs):
         # Pk estimation
         for kk in range(sz[2]):
             if iterNo > 1:
-                U, S, V = np.linalg.svd(Bk[:, :, kk].dot(Bs))
-                Pk[:, :, kk] = U[:, :R].dot(np.transpose(V))
+                U, S, V = np.linalg.svd(Bk[:, :, kk] @ Bs)
+                Pk[:, :, kk] = U[:, :R] @ V.T
                 # Bs estimation
-                Bs += Pk[:, :, kk].T @ Bk[:, :, kk]
-                BkDk[:, :, kk] = Bk[:, :, kk] @ (Dk[:, :, kk])
+                Bs = np.zeros((R, R))
+                Bs += mk[0, kk] * Pk[:, :, kk].T @ Bk[:, :, kk]
+                BkDk[:, :, kk] = Bk[:, :, kk] @ Dk[:, :, kk]
             else:
-                Bs += np.transpose(Pk[:, :, kk]).dot(Bk[:, :, kk])
-                BkDk[:, :, kk] = Bk[:, :, kk].dot(Dk[:, :, kk])
+                # U, S, V = svds(Bk[:, :, kk] @ Bs, R)
+                # Pk[:, :, kk] = U @ V.T
+                Bs = np.zeros((R, R))
+                Bs += mk[0, kk] * Pk[:, :, kk].T @ Bk[:, :, kk]
+                BkDk[:, :, kk] = Bk[:, :, kk] @ Dk[:, :, kk]
 
-        Bs /= np.sum(mk) ** (-1) * np.linalg.norm(Bs, axis=0)
+        Bs /= np.sum(mk)
+
+        # for rr in range(R):
+        #    Bs[:, rr] /= np.linalg.norm(Bs[:,rr])
+        Bs /= np.linalg.norm(Bs, axis=0)
 
         BkDkIK = BkDk.transpose(0, 2, 1).reshape((-1, R), order="F")
 
@@ -79,23 +87,26 @@ def pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bk, A, Dk, Bs):
             d, res = fnnls(BkDkIK.T @ BkDkIK, BkDkIK.T @ Xkij[:, jj])
             A[jj, :] = d
 
+        #A = np.transpose(np.linalg.inv(BkDkIK.T @ BkDkIK) @ BkDkIK.T @ Xkij)
+
         A /= np.linalg.norm(A, axis=0)
 
-        A = np.nan_to_num(A)
+        #A = np.nan_to_num(A)
 
         for kk in range(sz[2]):
             for ii in range(sz[0]):
                 Bk[ii, :, kk] = np.linalg.pinv(Dk[:, :, kk] @ (A.T @ A) @ Dk[:, :, kk] + mk[0, kk] * np.eye(R)) @ \
-                                np.transpose(Xk[ii, :, kk] @ A @ Dk[:, :, kk] + mk[0, kk]*Pk[ii, :, kk] @ Bs)
+                                np.transpose(Xk[ii, :, kk] @ A @ Dk[:, :, kk] + mk[0, kk] * Pk[ii, :, kk] @ Bs)
             Bk[:, :, kk] /= np.linalg.norm(Bk[:, :, kk], axis=0)
-            Bk[:, :, kk] = np.nan_to_num(Bk[:, :, kk])
+            # Bk[:, :, kk] = np.nan_to_num(Bk[:, :, kk])
             Dk[:, :, kk] = np.diag(np.diag(np.linalg.pinv(Bk[:, :, kk]) @ Xk[:, :, kk] @ np.linalg.pinv(A.T)))
+            # Dk[:, :, kk] = np.diag(np.diag(np.linalg.pinv(Bk[:, :, kk].T @ Bk[:, :, kk]) @ Bk[:, :, kk].T @ Xk[:, :, kk] @ A @ np.linalg.pinv(A.T @ A)))
         if iterNo == 1:
             for kk in range(sz[2]):
                 U, S, V = svds(Xk[:, :, kk] - np.mean(Xk[:, :, kk], axis=0), k=2)
                 S.sort()
                 SNR = S[1] ** 2 / S[0] ** 2
-                mk[0, kk] = 10 ** (-SNR / 10) * np.linalg.norm(Xk[:, :, kk] - Bk[:, :, kk] @ (Dk[:, :, kk]) @ (np.transpose(A))) ** 2 / np.linalg.norm(Bk[:, :, kk] - Pk[:, :, kk] @ (Bs)) ** 2
+                mk[0, kk] = 10 ** (-SNR / 10) * (np.linalg.norm(Xk[:, :, kk] - Bk[:, :, kk] @ Dk[:, :, kk] @ A.T) ** 2 / np.linalg.norm(Bk[:, :, kk] - Pk[:, :, kk] @ (Bs)) ** 2)
         elif iterNo < 10:
             for kk in range(sz[2]):
                 mk[0, kk] = np.minimum(mk[0, kk] * 1.02, 1e12)
@@ -115,11 +126,13 @@ def pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bk, A, Dk, Bs):
 
         if iterNo == 1:
             plt.plot(np.arange(sz[0]), Bk[:, :, 19] @ Dk[:, :, 19])
+            #plt.plot(np.arange(sz[1]), A)
             plt.draw()
             plt.pause(0.001)
         else:
             plt.clf()
             plt.plot(np.arange(sz[0]), Bk[:, :, 19] @ Dk[:, :, 19])
+            #plt.plot(np.arange(sz[1]), A)
             plt.draw()
             plt.pause(0.001)
 
@@ -195,7 +208,7 @@ def pyfparafac2(Xk, R, eps=1e-8, maxIter=1000, displ=True, animate=False, *args)
 
         initIndx = np.argmin(ssrInit)
 
-        Bk, A, Dk, Bs, ssr, pvar = pyfparafac2als(Xk, R, eps, maxiter, displ, animate, Bki, Ai[:, :, initIndx], Dki, Bsi)
+        Bk, A, Dk, Bs, ssr, pvar = pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bki, Ai[:, :, initIndx], Dki, Bsi)
 
     else:
         Bsi = np.eye(R)
@@ -211,6 +224,8 @@ def pyfparafac2(Xk, R, eps=1e-8, maxIter=1000, displ=True, animate=False, *args)
         for re in range(9):
             Ai[:, :, re] = np.random.rand(np.size(Xk, 1), R)
             Ai /= np.linalg.norm(Ai, axis=0)
+            Bki[:, :, :, re] = np.random.rand(np.size(Xk, 0), R, np.size(Xk, 2))
+
             for kk in range(np.size(Xk, 2)):
                 Bki[:, :, kk, re] /= np.linalg.norm(Bki[:, :, kk, re], axis=0)
 
@@ -221,11 +236,11 @@ def pyfparafac2(Xk, R, eps=1e-8, maxIter=1000, displ=True, animate=False, *args)
 
         initIndx = np.argmin(ssrInit)
 
-        Bk, A, Dk, Bs, ssr, pvar = pyfparafac2als(Xk, R, eps, maxiter, displ, animate, Bk[:, :, :, initIndx], Ai[:, :, initIndx], Dki, Bsi)
+        Bk, A, Dk, Bs, ssr, pvar = pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bki[:, :, :, initIndx], Ai[:, :, initIndx], Dki, Bsi)
 
     return Bk, A, Dk, Bs, ssr, pvar
 
 
 if __name__ == '__main__':
-    Bk, A, Dk, Bs, ssr, pvar = pyfparafac2("roi_2.npy", 3)
+    Bk, A, Dk, Bs, ssr, pvar = pyfparafac2("roi_2.npy", 2)
     print(np.log(ssr))
