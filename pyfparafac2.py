@@ -25,7 +25,7 @@ def pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bk, A, Dk, Bs):
     sz = np.shape(Xk)
     Pk = np.zeros((sz[0], R, sz[2]))
     Bhk = np.zeros((sz[0], R, sz[2]))
-    mk = np.zeros((1, sz[2]))
+    mk = np.zeros(sz[2])
     # Bk = np.random.rand(sz[0], R, sz[2])
     # Dk = np.eye(R)
     # Bs = np.eye(R)
@@ -35,13 +35,14 @@ def pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bk, A, Dk, Bs):
     BkDk = np.zeros((sz[0], R, sz[2]))
     Xkij = np.zeros((sz[0] * sz[2], sz[1]))
     BkDkIK = np.zeros((sz[0] * sz[2], R))
+    Bst = np.zeros((R, R, sz[2]))
     SSR = []
 
     for kk in range(sz[2]):
         U, S, V = np.linalg.svd(Bk[:, :, kk] @ Bs)
         Pk[:, :, kk] = U[:, :R] @ V.T
         Xh[:, :, kk] = Bk[:, :, kk] @ Dk[:, :, kk] @ A.T
-        mk[0, kk] = np.linalg.norm(np.ravel(Xk[:, :, kk]) - np.ravel(Xh[:, :, kk])) ** 2 / (np.linalg.norm(Bk[:, :, kk]) ** 2) # The norm of Bk should be equal to the number of factors
+        mk[kk] = np.linalg.norm(np.ravel(Xk[:, :, kk]) - np.ravel(Xh[:, :, kk])) ** 2 / (np.linalg.norm(Bk[:, :, kk]) ** 2) # The norm of Bk should be equal to the number of factors
         Bhk[:, :, kk] = Bk[:, :, kk] - Pk[:, :, kk] @ Bs
 
     ssr1 = np.linalg.norm(np.ravel(Xk) - np.ravel(Xh)) ** 2 + np.linalg.norm(np.ravel(Bk) - np.ravel(Bhk)) ** 2
@@ -61,17 +62,13 @@ def pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bk, A, Dk, Bs):
             if iterNo > 1:
                 U, S, V = np.linalg.svd(Bk[:, :, kk] @ Bs)
                 Pk[:, :, kk] = U[:, :R] @ V.T
-                # Bs estimation
-                Bs = np.zeros((R, R))
-                Bs += mk[0, kk] * Pk[:, :, kk].T @ Bk[:, :, kk]
+                Bst[:, :, kk] = mk[kk] * Pk[:, :, kk].T @ Bk[:, :, kk]
                 BkDk[:, :, kk] = Bk[:, :, kk] @ Dk[:, :, kk]
             else:
-                # U, S, V = svds(Bk[:, :, kk] @ Bs, R)
-                # Pk[:, :, kk] = U @ V.T
-                Bs = np.zeros((R, R))
-                Bs += mk[0, kk] * Pk[:, :, kk].T @ Bk[:, :, kk]
+                Bst[:, :, kk] = mk[kk] * Pk[:, :, kk].T @ Bk[:, :, kk]
                 BkDk[:, :, kk] = Bk[:, :, kk] @ Dk[:, :, kk]
 
+        Bs = np.sum(Bst, axis=2)
         Bs /= np.sum(mk)
 
         # for rr in range(R):
@@ -88,28 +85,31 @@ def pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bk, A, Dk, Bs):
             A[jj, :] = d
 
         #A = np.transpose(np.linalg.inv(BkDkIK.T @ BkDkIK) @ BkDkIK.T @ Xkij)
-
+        #A[A == 0] = 1e-20
         A /= np.linalg.norm(A, axis=0)
 
-        #A = np.nan_to_num(A)
+        A = np.nan_to_num(A)
 
         for kk in range(sz[2]):
             for ii in range(sz[0]):
-                Bk[ii, :, kk] = np.linalg.pinv(Dk[:, :, kk] @ (A.T @ A) @ Dk[:, :, kk] + mk[0, kk] * np.eye(R)) @ \
-                                np.transpose(Xk[ii, :, kk] @ A @ Dk[:, :, kk] + mk[0, kk] * Pk[ii, :, kk] @ Bs)
+                Bk[ii, :, kk] = np.linalg.pinv(Dk[:, :, kk] @ (A.T @ A) @ Dk[:, :, kk] + mk[kk] * np.eye(R)) @ \
+                                np.transpose(Xk[ii, :, kk] @ A @ Dk[:, :, kk] + mk[kk] * Pk[ii, :, kk] @ Bs)
+            #Bk[Bk == 0] = 1e-20
             Bk[:, :, kk] /= np.linalg.norm(Bk[:, :, kk], axis=0)
-            # Bk[:, :, kk] = np.nan_to_num(Bk[:, :, kk])
-            Dk[:, :, kk] = np.diag(np.diag(np.linalg.pinv(Bk[:, :, kk]) @ Xk[:, :, kk] @ np.linalg.pinv(A.T)))
-            # Dk[:, :, kk] = np.diag(np.diag(np.linalg.pinv(Bk[:, :, kk].T @ Bk[:, :, kk]) @ Bk[:, :, kk].T @ Xk[:, :, kk] @ A @ np.linalg.pinv(A.T @ A)))
+            Bk[:, :, kk] = np.nan_to_num(Bk[:, :, kk])
+
+            # Dk[:, :, kk] = np.diag(np.diag(np.linalg.pinv(Bk[:, :, kk]) @ Xk[:, :, kk] @ np.linalg.pinv(A.T)))
+            Dk[:, :, kk] = np.diag(np.diag(np.linalg.pinv(Bk[:, :, kk].T @ Bk[:, :, kk]) @ Bk[:, :, kk].T @ Xk[:, :, kk] @ A @ np.linalg.pinv(A.T @ A)))
+
         if iterNo == 1:
             for kk in range(sz[2]):
-                U, S, V = svds(Xk[:, :, kk] - np.mean(Xk[:, :, kk], axis=0), k=2)
-                S.sort()
-                SNR = S[1] ** 2 / S[0] ** 2
-                mk[0, kk] = 10 ** (-SNR / 10) * (np.linalg.norm(Xk[:, :, kk] - Bk[:, :, kk] @ Dk[:, :, kk] @ A.T) ** 2 / np.linalg.norm(Bk[:, :, kk] - Pk[:, :, kk] @ (Bs)) ** 2)
+                U1, S1, V1 = svds(Xk[:, :, kk] - np.mean(Xk[:, :, kk], axis=0), k=2)
+                S1.sort()
+                SNR = S1[1] ** 2 / S1[0] ** 2
+                mk[kk] = 10 ** (-SNR / 10) * (np.linalg.norm(Xk[:, :, kk] - Bk[:, :, kk] @ Dk[:, :, kk] @ A.T) ** 2 / np.linalg.norm(Bk[:, :, kk] - Pk[:, :, kk] @ (Bs)) ** 2)
         elif iterNo < 10:
             for kk in range(sz[2]):
-                mk[0, kk] = np.minimum(mk[0, kk] * 1.02, 1e12)
+                mk[kk] = np.minimum(mk[kk] * 1.02, 1e12)
 
         for kk in range(sz[2]):
             Xh[:, :, kk] = Bk[:, :, kk] @ (Dk[:, :, kk]) @ A.T
@@ -125,14 +125,15 @@ def pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bk, A, Dk, Bs):
             print(iterNo, "\t\t", "%.4e" % abs(ssr2-ssr1), "\t\t", "%.4e" % (abs(ssr2-ssr1)/ssr2), "\t\t", "%.4e" % SSR[iterNo-1], "\t\t", "%.4e" % np.mean(mk), "\n")
 
         if iterNo == 1:
-            plt.plot(np.arange(sz[0]), Bk[:, :, 19] @ Dk[:, :, 19])
-            #plt.plot(np.arange(sz[1]), A)
+            plt.clf()
+            #plt.plot(np.arange(sz[0]), Bk[:, :, 19] @ Dk[:, :, 19])
+            plt.plot(np.arange(sz[1]), A)
             plt.draw()
             plt.pause(0.001)
         else:
             plt.clf()
-            plt.plot(np.arange(sz[0]), Bk[:, :, 19] @ Dk[:, :, 19])
-            #plt.plot(np.arange(sz[1]), A)
+            #plt.plot(np.arange(sz[0]), Bk[:, :, 19] @ Dk[:, :, 19])
+            plt.plot(np.arange(sz[1]), A)
             plt.draw()
             plt.pause(0.001)
 
