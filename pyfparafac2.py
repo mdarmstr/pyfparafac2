@@ -68,8 +68,8 @@ def pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bk, A, Dk, Bs):
                 Bst[:, :, kk] = mk[kk] * Pk[:, :, kk].T @ Bk[:, :, kk]
                 BkDk[:, :, kk] = Bk[:, :, kk] @ Dk[:, :, kk]
 
-        Bs = np.sum(Bst, axis=2)
-        Bs /= np.sum(mk)
+        Bs = 1 / (np.sum(mk) * np.sum(Bst, axis=2))
+        # Bs /= np.sum(mk)
 
         # for rr in range(R):
         #    Bs[:, rr] /= np.linalg.norm(Bs[:,rr])
@@ -78,8 +78,8 @@ def pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bk, A, Dk, Bs):
         BkDkIK = BkDk.transpose(0, 2, 1).reshape((-1, R), order="F")
 
         if iterNo == 1:
-            Xkij = Xk.transpose(0, 2, 1).reshape((-1, sz[1]), order="F")
-
+            #Xkij = Xk.transpose(0, 2, 1).reshape((-1, sz[1]), order="F")
+            Xkij = np.vstack(Xk)
         for jj in range(sz[1]):
             d, res = fnnls(BkDkIK.T @ BkDkIK, BkDkIK.T @ Xkij[:, jj])
             A[jj, :] = d
