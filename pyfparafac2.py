@@ -37,20 +37,22 @@ def pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bk, A, Dk, Bs):
     BkDkIK = np.zeros((sz[0] * sz[2], R))
     Bst = np.zeros((R, R, sz[2]))
     SSR = []
+    res_mdl = []
+    res_cpl = []
 
     for kk in range(sz[2]):
         U, S, V = np.linalg.svd(Bk[:, :, kk] @ Bs)
         Pk[:, :, kk] = U[:, :R] @ V.T
-        Xh[:, :, kk] = Bk[:, :, kk] @ Dk[:, :, kk] @ A.T
-        mk[kk] = np.linalg.norm(np.ravel(Xk[:, :, kk]) - np.ravel(Xh[:, :, kk])) ** 2 / (np.linalg.norm(Bk[:, :, kk]) ** 2) # The norm of Bk should be equal to the number of factors
-        Bhk[:, :, kk] = Bk[:, :, kk] - Pk[:, :, kk] @ Bs
+        mk[kk] = np.linalg.norm(Xk[:, :, kk] - Xh[:, :, kk]) ** 2 / (np.linalg.norm(Bk[:, :, kk]) ** 2) # The norm of Bk should be equal to the number of factors
+        res_mdl.append(np.linalg.norm(Xk[:, :, kk] - Bk[:, :, kk] @ Dk[:, :, kk] @ A.T) ** 2)
+        res_cpl.append(mk[kk] * np.linalg.norm(Bk[:, :, kk] - Pk[:, :, kk] @ Bs) ** 2)
 
-    ssr1 = np.linalg.norm(np.ravel(Xk) - np.ravel(Xh)) ** 2 + np.linalg.norm(np.ravel(Bk) - np.ravel(Bhk)) ** 2
+    #ssr1 = np.linalg.norm(np.ravel(Xk) - np.ravel(Xh)) ** 2 + np.linalg.norm(np.ravel(Bk) - np.ravel(Bhk)) ** 2
 
     ssr2 = 1e-6
     iterNo = 1
     YNorm = np.linalg.norm(np.ravel(Xk)) ** 2
-    ssr1 /= YNorm
+    ssr1 = sum(res_mdl + res_cpl) / YNorm
 
     # Loop
     while abs(ssr1 - ssr2) / ssr2 > eps and abs(ssr1 - ssr2) > eps and iterNo < maxIter:
@@ -68,7 +70,7 @@ def pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bk, A, Dk, Bs):
                 Bst[:, :, kk] = mk[kk] * Pk[:, :, kk].T @ Bk[:, :, kk]
                 BkDk[:, :, kk] = Bk[:, :, kk] @ Dk[:, :, kk]
 
-        Bs = 1 / (np.sum(mk) * np.sum(Bst, axis=2))
+        Bs = (1 / np.sum(mk)) * np.sum(Bst, axis=2)
         # Bs /= np.sum(mk)
 
         # for rr in range(R):
@@ -89,33 +91,42 @@ def pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bk, A, Dk, Bs):
         #A[A == 0] = 1e-20
         A = A / np.linalg.norm(A, axis=0)
 
-        A = np.nan_to_num(A)
-
+        #A = np.nan_to_num(A)
+        A[np.isnan(A)] = 0
         for kk in range(sz[2]):
             for ii in range(sz[0]):
                 Bk[ii, :, kk] = np.linalg.pinv(Dk[:, :, kk] @ (A.T @ A) @ Dk[:, :, kk] + mk[kk] * np.eye(R)) @ (Xk[ii, :, kk] @ A @ Dk[:, :, kk] + mk[kk] * Pk[ii, :, kk] @ Bs).T
             #Bk[Bk == 0] = 1e-20
             Bk[:, :, kk] /= np.linalg.norm(Bk[:, :, kk], axis=0)
-            Bk[:, :, kk] = np.nan_to_num(Bk[:, :, kk])
-
+            #Bk[:, :, kk] = np.nan_to_num(Bk[:, :, kk])
             # Dk[:, :, kk] = np.diag(np.diag(np.linalg.pinv(Bk[:, :, kk]) @ Xk[:, :, kk] @ np.linalg.pinv(A.T)))
             Dk[:, :, kk] = np.diag(np.diag(np.linalg.pinv(Bk[:, :, kk].T @ Bk[:, :, kk]) @ Bk[:, :, kk].T @ Xk[:, :, kk] @ np.linalg.pinv(A).T)) #@ A @ np.linalg.pinv(A.T @ A)))
 
+        Bk[np.isnan(Bk)] = 0
+
         if iterNo == 1:
             for kk in range(sz[2]):
-                U1, S1, V1 = svds(Xk[:, :, kk] - np.mean(Xk[:, :, kk], axis=0), k=2)
+                Xt = Xk[:, :, kk] - np.mean(Xk[:, :, kk], axis=0) / np.std(Xk[:, :, kk], axis=0)
+                Xt[np.isnan(Xt)] = 0
+                U1, S1, V1 = svds(Xt, k=2)
                 S1.sort()
                 SNR = S1[1] ** 2 / S1[0] ** 2
-                mk[kk] = 10 ** (-SNR / 10) * (np.linalg.norm(Xk[:, :, kk] - Bk[:, :, kk] @ Dk[:, :, kk] @ A.T) ** 2 / np.linalg.norm(Bk[:, :, kk] - Pk[:, :, kk] @ (Bs)) ** 2)
+                mk[kk] = 10 ** (-SNR / 10) * (np.linalg.norm(Xk[:, :, kk] - Bk[:, :, kk] @ Dk[:, :, kk] @ A.T) ** 2 / np.linalg.norm(Bk[:, :, kk] - Pk[:, :, kk] @ Bs) ** 2)
         elif iterNo < 10:
             for kk in range(sz[2]):
                 mk[kk] = np.minimum(mk[kk] * 1.05, 1e12)
 
         for kk in range(sz[2]):
-            Xh[:, :, kk] = Bk[:, :, kk] @ (Dk[:, :, kk]) @ A.T
-            Bhk[:, :, kk] = np.linalg.norm(Bk[:, :, kk] - Pk[:, :, kk] @ Bs)
+            res_mdl[kk] = (np.linalg.norm(Xk[:, :, kk] - Bk[:, :, kk] @ Dk[:, :, kk] @ A.T, 'fro') ** 2)
+            res_cpl[kk] = (mk[kk] * np.linalg.norm(Bk[:, :, kk] - Pk[:, :, kk] @ Bs, 'fro') ** 2)
 
-        ssr2 = ((np.linalg.norm(np.ravel(Xk) - np.ravel(Xh))**2) + np.linalg.norm(np.ravel(Bhk))**2)/YNorm
+        ssr2 = sum(res_mdl + res_cpl) / YNorm
+
+        #for kk in range(sz[2]):
+        #    Xh[:, :, kk] = Bk[:, :, kk] @ Dk[:, :, kk] @ A.T
+        #    Bhk[:, :, kk] = np.linalg.norm(Bk[:, :, kk] - Pk[:, :, kk] @ Bs)
+
+        #ssr2 = ((np.linalg.norm(np.ravel(Xk) - np.ravel(Xh))**2) + np.linalg.norm(np.ravel(Bhk))**2)/YNorm
         SSR.append(ssr2)
 
         if iterNo == 1:
@@ -132,8 +143,8 @@ def pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bk, A, Dk, Bs):
             plt.pause(0.001)
         else:
             plt.clf()
-            plt.plot(np.arange(sz[0]), Bk[:, :, 19]) #@ Dk[:, :, 19])
-            #plt.plot(np.arange(sz[1]), A)
+            #plt.plot(np.arange(sz[0]), Bk[:, :, 19]) #@ Dk[:, :, 19])
+            plt.plot(np.arange(sz[1]), A)
             plt.draw()
             plt.pause(0.001)
 
@@ -143,6 +154,7 @@ def pyfparafac2als(Xk, R, eps, maxIter, displ, animate, Bk, A, Dk, Bs):
 
     plt.clf()
     plt.plot(np.arange(len(SSR)-1), np.diff(np.log(SSR)))
+    plt.show()
 
     return Bk, A, Dk, Bs, SSR, pvar
 
