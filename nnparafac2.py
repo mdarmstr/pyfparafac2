@@ -97,6 +97,8 @@ class nnparafac2:
         self.__tnsr0 = tl.unfold(self.__tnsr, 0) #For the BkDk step.
         self.__BkDk = krb(tl.unfold(tnsr.__Bk,0), tl.unfold(tnsr.__Dk,0))
         
+        # You forgot to optimise for Pk here.
+        
         def optBs(self): #vectorize this
             for kk in range(self.__tnsr.shape[2]):
                 self.__Bst[:, :, kk] = self.__mk[kk] * self.__Pk[:, :, kk].T @ self.__Bk[:, :, kk]
@@ -136,6 +138,25 @@ class nnparafac2:
         
         def incIter(self):
             self.__iterNo += 1
+        
+        def fit(self):
+            
+            epsRel = self.__relThres
+            epsAbs = self.__absThres
+            
+            yMdl = np.linalg.norm(np.ravel(self.__tnsr)) ** 2
+            
+            yCpl = np.linalg.norm(np.ravel(self.__Bk)) ** 2
+            
+            # ssr1 = 1
+            ssr2 = 0.5 * np.linalg.norm(self.__resMdl, 'fro') ** 2 / yMdl  + 0.5 * np.linalg.norm(self.__resCpl, 'fro') ** 2 / yCpl
+            
+            while abs(ssr1 - ssr2) / ssr2 > relThres and abs(ssr1 - ssr2) > absThres:
+                
+                ssr1 = ssr2
+                
+                self.opt
+        
             
             
         
